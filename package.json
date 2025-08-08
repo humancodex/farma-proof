@@ -1,0 +1,22 @@
+{
+  "name": "midnight-starter",
+  "version": "1.0.0",
+  "description": "Lightweight starter kit for developing Midnight smart contracts",
+  "scripts": {
+    "build": "compactc src/OwnableCounter.compact out/OwnableCounter",
+    "test": "vitest"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "author": "Ezequiel Perez",
+  "license": "MIT",
+  "devDependencies": {
+    "@midnight-ntwrk/ledger": "^4.0.0",
+    "@types/node": "^24.2.0",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "^0.8.1"
+  }
+}
