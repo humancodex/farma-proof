@@ -3,14 +3,6 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "lts"
-    },
-    "ghcr.io/devcontainers/features/common-utils:2": {
-      "configureZshAsDefaultShell": true
-    }
-  },
   "customizations": {
     "vscode": {
       "extensions": ["/tmp/compact.vsix"]
