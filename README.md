@@ -1,6 +1,6 @@
 # Midnight Starter Kit
 
-A complete starter for building and testing Midnight smart contracts in Compact. It ships with a [devcontainer](https://code.visualstudio.com/docs/devcontainers/containers) setup, a minimal `OwnableCounter` example (adapted from Midnight's [example-counter](https://github.com/midnightntwrk/example-counter)), reusable modules (copied from OpenZeppelin's [compact-contracts](https://github.com/OpenZeppelin/compact-contracts)), and a Vitest test suite driven by a small TypeScript contract simulator.
+A complete starter for building and testing [Midnight](https://docs.midnight.network) smart contracts in Compact. It ships with a [devcontainer](https://code.visualstudio.com/docs/devcontainers/containers) setup, a minimal `OwnableCounter` example (adapted from Midnight's [example-counter](https://github.com/midnightntwrk/example-counter)), reusable modules (copied from OpenZeppelin's [compact-contracts](https://github.com/OpenZeppelin/compact-contracts)), and a Vitest test suite driven by a small TypeScript contract simulator.
 
 ## Highlights
 
