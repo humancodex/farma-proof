@@ -1,83 +1,282 @@
-# Midnight Starter Kit
+# Farma-Proof: Prescription Management on Midnight Network
 
-A complete starter for building and testing [Midnight](https://docs.midnight.network) smart contracts in Compact. It ships with a [devcontainer](https://code.visualstudio.com/docs/devcontainers/containers) setup, a minimal `OwnableCounter` example (adapted from Midnight's [example-counter](https://github.com/midnightntwrk/example-counter)), reusable modules (copied from OpenZeppelin's [compact-contracts](https://github.com/OpenZeppelin/compact-contracts)), and a Vitest test suite driven by a small TypeScript contract simulator.
+A privacy-preserving prescription management system built on Midnight Network using Compact smart contracts and OpenZeppelin Contracts-for-Compact.
 
-## Highlights
+## 🚀 Overview
 
-- Devcontainer with all necessary tools for development (`compactc`, `node`, Compact's VS Code extension)
-- Compact contract example: `src/OwnableCounter.compact`
-- Reusable modules: `src/modules/{Ownable,Initializable,Utils}.compact`
-- Vitest tests and a simulator for fast, off-chain execution
+Farma-Proof leverages Midnight Network's zero-knowledge capabilities to enable secure, private prescription management while maintaining regulatory compliance and audit trails. The system uses Compact smart contracts with selective disclosure, allowing patients to prove eligibility without revealing sensitive information.
 
-## Requirements
+## 🏗️ Architecture
 
-> [!TIP]
-> All the following are already installed in the provided [devcontainer](.devcontainer). The [`Dockerfile`](.devcontainer/Dockerfile) can be adjusted to update or add tools as needed.
+### Core Components
 
-- [Node.js](https://nodejs.org/en/download) >= 22.18
-- [Compact compiler](https://docs.midnight.network/develop/tutorial/building/#midnight-compact-compiler) (`compactc`)
-  - Verify: `compactc --version`
-  - Ensure `compactc` is on your PATH
+#### A. Roles & Access Control
+- **AccessControl**: ADMIN_ROLE, DOCTOR_ROLE, PHARMACY_ROLE, VERIFIER_ROLE
+- **MedicineRegistry**: Central registry for medicine codes and policies
+- **PrescriptionToken**: NFT-like tokens representing prescriptions
+- **OrderEscrow**: Order management and fulfillment system
 
-## Quick start
+#### B. Privacy Features
+- **Zero-Knowledge Proofs**: Selective disclosure of prescription eligibility
+- **Shielded Fields**: Private patient data, prescription details, and quantities
+- **Unshielded Events**: Public audit trails without PII exposure
 
-1) Install dependencies
-- `npm install`
+## 📋 Smart Contracts
 
-2) Build the contracts
-- `npm run build`
-- The output will be placed in the `out` directory.
-
-3) Run tests
-- `npm test`
-- If you edit any `.compact` file, rebuild before testing to avoid stale imports.
-
-## Project structure
-
-```
-.
-├── package.json
-├── README.md
-├── src/
-│   ├── OwnableCounter.compact                # Example contract
-│   └── modules/
-│       ├── Initializable.compact
-│       ├── Ownable.compact
-│       └── Utils.compact
-└── test/
-    ├── OwnableCounter.test.ts                # Vitest unit tests
-    ├── simulators/
-    │   └── OwnableCounterSimulator.ts        # Thin wrapper around generated contract runtime
-    └── utils/
-        └── address.ts                        # Helpers for test addresses/keys
+### MedicineRegistry.compact
+```compact
+// Admin-only functions
+addMedicine(codeHash, name, maxQtyPerRx, status)
+// Public queries
+isValid(codeHash) -> bool
+policy(codeHash) -> Policy
 ```
 
-Build artifacts are placed under `out` by the `build` script.
+### PrescriptionToken.compact
+```compact
+// Doctor functions
+mintRx(patientShieldedAddr, metaCommitment)
+revokeRx(tokenId)
 
-### Example Contract overview
+// Shielded fields (private)
+patientCommitment, codeHash, expiresAt, qtyAllowed
+// Unshielded fields (public)
+tokenId, events
+```
 
-The `OwnableCounter` contract exposes:
-- `increment()` — increments the counter by 1
-- `reset()` — resets the counter to 0 (owner-only)
-- `owner()` — returns current owner
-- `transferOwnership(newOwner)` — transfers ownership to a new public key
-- `renounceOwnership()` — burns ownership
+### OrderEscrow.compact
+```compact
+// Patient functions
+createOrder(pharmacy, codeHash, qty, proofRefHash)
+pay(orderId, asset)
 
-Constructor:
-- `constructor(initialOwner: Either<ZswapCoinPublicKey, ContractAddress>)` — must be called at deployment to initialize ownership.
+// Verifier functions
+acceptProof(orderId, attestation)
 
-Notes on ownership (see `src/modules/Ownable.compact`):
-- Ownership transfers to contract addresses are disallowed in the safe path until contract-to-contract calls are supported.
-- The module provides explicit “unsafe” variants for experimentation.
+// Pharmacy functions
+fulfill(orderId, tokenId)
+```
 
-## Extending this starter
+## 🔐 Zero-Knowledge Proofs
 
-- Add new contracts to `src/` and modules to `src/modules/`
-- Update `package.json` scripts (or add new ones) to compile additional entry points
-- Create new simulators modeled after `test/simulators/OwnableCounterSimulator.ts`
-- Add more unit tests with Vitest
+### What Patients Prove
+- Valid prescription token ownership
+- Medicine code match
+- Prescription not expired
+- Sufficient quantity remaining
+- Valid doctor signature
 
-## Acknowledgements
+### Verification Flow
+1. **Off-chain Prover**: Generates ZK proof + attestation
+2. **Verifier Service**: Signs attestation (VERIFIER_ROLE)
+3. **On-chain Validation**: OrderEscrow.acceptProof verifies signature
 
-- Counter contract and tests adapted from Midnight's [example-counter](https://github.com/midnightntwrk/example-counter).
-- Compact modules and utilities copied from [OpenZeppelin/compact-contracts](https://github.com/OpenZeppelin/compact-contracts), which cannot be installed as an `npm` package yet.
+## 💰 Payment System
+
+- **Fees**: Paid in Dust (Midnight Network's fee token)
+- **Assets**: Compact fungible tokens for prescription payments
+- **Escrow**: Secure payment handling until fulfillment
+
+## 🔄 End-to-End Flow
+
+```mermaid
+sequenceDiagram
+  participant Doc as Doctor (UI)
+  participant PT as PrescriptionToken
+  participant P as Patient (UI)
+  participant Prov as ZK Prover (off-chain)
+  participant Ver as Verifier Service
+  participant Esc as OrderEscrow
+  participant Reg as MedicineRegistry
+  participant Pharm as Pharmacy (UI)
+
+  Doc->>PT: mintRx(patientShieldedAddr, commitment)
+  Note right of PT: tokenId=unique; shielded meta
+
+  P->>Reg: lookup(codeHash)
+  P->>Prov: request proof(codeHash,qty,tokenId?)
+  Prov->>Ver: submit proof for attestation
+  Ver-->>P: attestation + proofRefHash (signed)
+
+  P->>Esc: createOrder(pharmacy, codeHash, qty, proofRefHash)
+  Esc->>Reg: check isValid(codeHash)
+  Ver-->>Esc: acceptProof(orderId, attestation)
+  P->>Esc: pay(orderId, asset)
+  Pharm->>Esc: fulfill(orderId, tokenId)
+```
+
+## 🛠️ Development Setup
+
+### Prerequisites
+- Node.js (latest LTS)
+- Compact compiler (compactc)
+- Midnight Network testnet access
+- Dust faucet for fees
+
+### Installation
+```bash
+# Clone the repository
+git clone <repository-url>
+cd farma-proof
+
+# Install dependencies
+npm install
+
+# Compile contracts
+npm run compile
+
+# Run tests
+npm test
+```
+
+### Environment Setup
+```bash
+# Set Midnight Network configuration
+export MIDNIGHT_RPC_URL=<testnet-rpc-url>
+export MIDNIGHT_PRIVATE_KEY=<your-private-key>
+export DUST_FAUCET_URL=<dust-faucet-url>
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test suite
+npm run test:contracts
+npm run test:integration
+npm run test:zk
+
+# Run with coverage
+npm run test:coverage
+```
+
+## 📊 API Endpoints (Backend)
+
+### ZK Proof Generation
+```http
+POST /zk/prove
+Content-Type: application/json
+
+{
+  "codeHash": "string",
+  "quantity": "number",
+  "tokenId": "string"
+}
+```
+
+### Attestation
+```http
+POST /zk/attest
+Content-Type: application/json
+
+{
+  "proofRefHash": "string",
+  "proof": "object"
+}
+```
+
+### Prescription Management
+```http
+POST /vc/issue
+Content-Type: application/json
+
+{
+  "patientAddress": "string",
+  "medicineCode": "string",
+  "quantity": "number",
+  "expiryDate": "string"
+}
+```
+
+### Medicine Registry
+```http
+GET /medicines
+GET /medicines/{codeHash}
+```
+
+## 🚦 Development Roadmap
+
+### Sprint 0: Tooling & Networks
+- [ ] Compact toolchain setup
+- [ ] Midnight testnet connection
+- [ ] Dust faucet integration
+- [ ] Monorepo + CI configuration
+
+### Sprint 1: Core Infrastructure
+- [ ] AccessControl implementation
+- [ ] MedicineRegistry contract
+- [ ] Admin panel operations
+
+### Sprint 2: Prescription Tokens
+- [ ] PrescriptionToken contract
+- [ ] Mint/revoke functionality
+- [ ] Shielded commitment handling
+
+### Sprint 3: ZK Integration
+- [ ] Off-chain prover service
+- [ ] Verifier attestation flow
+- [ ] Proof validation
+
+### Sprint 4: Order Management
+- [ ] OrderEscrow state machine
+- [ ] Payment processing
+- [ ] Fulfillment workflow
+
+### Sprint 5: Hardening & Audit
+- [ ] Security audit
+- [ ] Threat modeling
+- [ ] Dashboard development
+- [ ] Performance optimization
+
+## 🔒 Security & Privacy
+
+### Privacy Guarantees
+- **No PII on-chain**: Only commitments and hashes
+- **Selective disclosure**: Prove eligibility without revealing identity
+- **Audit trails**: Public events without sensitive data exposure
+
+### Security Measures
+- **Access Control**: Role-based permissions throughout
+- **Pausable contracts**: Emergency stop mechanisms
+- **Key rotation**: Verifier service key management
+- **Circuit validation**: Comprehensive ZK proof testing
+
+## 📚 Resources
+
+- [Midnight Network Documentation](https://docs.midnight.network/)
+- [Compact Language Reference](https://docs.midnight.network/compact/)
+- [OpenZeppelin Contracts-for-Compact](https://github.com/OpenZeppelin/contracts-for-compact)
+- [ZK Proof Concepts](https://docs.midnight.network/zk-proofs/)
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- **Documentation**: [Project Wiki](link-to-wiki)
+- **Issues**: [GitHub Issues](link-to-issues)
+- **Discussions**: [GitHub Discussions](link-to-discussions)
+- **Community**: [Midnight Network Discord](link-to-discord)
+
+## 🔮 Future Enhancements
+
+- **Multi-chain support**: Extend to other privacy-focused blockchains
+- **Advanced ZK circuits**: More sophisticated proof generation
+- **Mobile SDK**: Native mobile application support
+- **Regulatory compliance**: Built-in compliance reporting tools
+- **Analytics dashboard**: Advanced analytics and insights
+
+---
+
+**Built with ❤️ on Midnight Network**
