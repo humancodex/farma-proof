@@ -1,0 +1,179 @@
+// SPDX-License-Identifier: MIT
+
+pragma language_version >= 0.16.0;
+
+import "./modules/NonFungibleToken" prefix NFT_;
+import "./modules/AccessControl" prefix AC_;
+import CompactStandardLibrary;
+
+// Roles
+export sealed ledger DOCTOR_ROLE: Bytes<32>;
+export sealed ledger PHARMACY_ROLE: Bytes<32>;
+export sealed ledger ADMIN_ROLE: Bytes<32>;
+
+// Prescription states
+export enum Status { init, verified, paid, delivered }
+
+// Ledger storage
+export ledger _prescriptions: Map<Uint<128>, PrescriptionData>;
+export ledger _nextTokenId: Uint<128>;
+
+// Prescription data structure
+export struct PrescriptionData {
+  drugName: Opaque<"string">,
+  dosage: Opaque<"string">,
+  quantity: Uint<128>,
+  healthInsurance: Opaque<"string">,
+  doctorWallet: ZswapCoinPublicKey,
+  patientWallet: ZswapCoinPublicKey,
+  issuedAt: Uint<64>,
+  expiresAt: Uint<64>,
+  status: Status
+}
+
+constructor(name: Opaque<"string">, symbol: Opaque<"string">) {
+  NFT_initialize(name, symbol);
+
+  DOCTOR_ROLE = persistentHash<Bytes<32>>(pad(32, "DOCTOR_ROLE"));
+  PHARMACY_ROLE = persistentHash<Bytes<32>>(pad(32, "PHARMACY_ROLE"));
+  ADMIN_ROLE = persistentHash<Bytes<32>>(pad(32, "ADMIN_ROLE"));
+
+  AC_DEFAULT_ADMIN_ROLE = ADMIN_ROLE;
+  AC__grantRole(ADMIN_ROLE, left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()));
+
+  _nextTokenId = 1;
+}
+
+// Admin assigns roles
+export circuit addDoctor(doctorWallet: ZswapCoinPublicKey): [] {
+  AC_assertOnlyRole(ADMIN_ROLE);
+  AC_grantRole(DOCTOR_ROLE, left<ZswapCoinPublicKey, ContractAddress>(disclose(doctorWallet)));
+}
+
+export circuit addPharmacy(pharmacyWallet: ZswapCoinPublicKey): [] {
+  AC_assertOnlyRole(ADMIN_ROLE);
+  AC_grantRole(PHARMACY_ROLE, left<ZswapCoinPublicKey, ContractAddress>(disclose(pharmacyWallet)));
+}
+
+// Doctor creates prescription (init state)
+export circuit createPrescription(
+  patientWallet: ZswapCoinPublicKey,
+  drugName: Opaque<"string">,
+  dosage: Opaque<"string">,
+  quantity: Uint<128>,
+  healthInsurance: Opaque<"string">,
+  issuedAt: Uint<64>,
+  expiresAt: Uint<64>
+): Uint<128> {
+  AC_assertOnlyRole(DOCTOR_ROLE);
+
+  const tokenId = _nextTokenId;
+  const prescription = PrescriptionData {
+    drugName: disclose(drugName),
+    dosage: disclose(dosage),
+    quantity: disclose(quantity),
+    healthInsurance: disclose(healthInsurance),
+    doctorWallet: disclose(ownPublicKey()),
+    patientWallet: disclose(patientWallet),
+    issuedAt: disclose(issuedAt),
+    expiresAt: disclose(expiresAt),
+    status: Status.init
+  };
+
+  _prescriptions.insert(disclose(tokenId), disclose(prescription));
+  NFT__mint(left<ZswapCoinPublicKey, ContractAddress>(disclose(patientWallet)), disclose(tokenId));
+  _nextTokenId = (_nextTokenId + 1) as Uint<128>;
+
+  return disclose(tokenId);
+}
+
+// Pharmacy verifies prescription (init -> verified)
+export circuit verifyPrescription(tokenId: Uint<128>): [] {
+  AC_assertOnlyRole(PHARMACY_ROLE);
+  assert(_prescriptions.member(disclose(tokenId)), "Prescription does not exist");
+
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  assert(prescription.status == Status.init, "Prescription not in init state");
+
+  const updated = PrescriptionData {
+    drugName: prescription.drugName,
+    dosage: prescription.dosage,
+    quantity: prescription.quantity,
+    healthInsurance: prescription.healthInsurance,
+    doctorWallet: prescription.doctorWallet,
+    patientWallet: prescription.patientWallet,
+    issuedAt: prescription.issuedAt,
+    expiresAt: prescription.expiresAt,
+    status: Status.verified
+  };
+
+  _prescriptions.insert(disclose(tokenId), disclose(updated));
+}
+
+// Patient pays for prescription (verified -> paid)
+export circuit payPrescription(tokenId: Uint<128>): [] {
+  assert(_prescriptions.member(disclose(tokenId)), "Prescription does not exist");
+
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  assert(prescription.status == Status.verified, "Prescription not verified");
+  assert(disclose(ownPublicKey()) == prescription.patientWallet, "Not prescription owner");
+
+  const updated = PrescriptionData {
+    drugName: prescription.drugName,
+    dosage: prescription.dosage,
+    quantity: prescription.quantity,
+    healthInsurance: prescription.healthInsurance,
+    doctorWallet: prescription.doctorWallet,
+    patientWallet: prescription.patientWallet,
+    issuedAt: prescription.issuedAt,
+    expiresAt: prescription.expiresAt,
+    status: Status.paid
+  };
+
+  _prescriptions.insert(disclose(tokenId), disclose(updated));
+}
+
+// Pharmacy delivers medicine (paid -> delivered) and burns NFT
+export circuit deliverPrescription(tokenId: Uint<128>): [] {
+  AC_assertOnlyRole(PHARMACY_ROLE);
+  assert(_prescriptions.member(disclose(tokenId)), "Prescription does not exist");
+
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  assert(prescription.status == Status.paid, "Prescription not paid");
+
+  const updated = PrescriptionData {
+    drugName: prescription.drugName,
+    dosage: prescription.dosage,
+    quantity: prescription.quantity,
+    healthInsurance: prescription.healthInsurance,
+    doctorWallet: prescription.doctorWallet,
+    patientWallet: prescription.patientWallet,
+    issuedAt: prescription.issuedAt,
+    expiresAt: prescription.expiresAt,
+    status: Status.delivered
+  };
+
+  _prescriptions.insert(disclose(tokenId), disclose(updated));
+  NFT__burn(disclose(tokenId));
+}
+
+// View prescription
+export circuit getPrescription(tokenId: Uint<128>): PrescriptionData {
+  assert(_prescriptions.member(disclose(tokenId)), "Prescription does not exist");
+  return _prescriptions.lookup(disclose(tokenId));
+}
+
+// Get status
+export circuit getStatus(tokenId: Uint<128>): Status {
+  assert(_prescriptions.member(disclose(tokenId)), "Prescription does not exist");
+  return _prescriptions.lookup(disclose(tokenId)).status;
+}
+
+// Role checks
+export circuit isDoctor(wallet: ZswapCoinPublicKey): Boolean {
+  return AC_hasRole(DOCTOR_ROLE, left<ZswapCoinPublicKey, ContractAddress>(disclose(wallet)));
+}
+
+export circuit isPharmacy(wallet: ZswapCoinPublicKey): Boolean {
+  return AC_hasRole(PHARMACY_ROLE, left<ZswapCoinPublicKey, ContractAddress>(disclose(wallet)));
+}

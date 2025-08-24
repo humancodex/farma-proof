@@ -1,0 +1,363 @@
+{
+  "circuits": [
+    {
+      "name": "addDoctor",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "doctorWallet",
+          "type": {
+            "type-name": "Struct",
+            "name": "ZswapCoinPublicKey",
+            "elements": [
+              {
+                "name": "bytes",
+                "type": {
+                  "type-name": "Bytes",
+                  "length": 32
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "addPharmacy",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "pharmacyWallet",
+          "type": {
+            "type-name": "Struct",
+            "name": "ZswapCoinPublicKey",
+            "elements": [
+              {
+                "name": "bytes",
+                "type": {
+                  "type-name": "Bytes",
+                  "length": 32
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "createPrescription",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "patientWallet",
+          "type": {
+            "type-name": "Struct",
+            "name": "ZswapCoinPublicKey",
+            "elements": [
+              {
+                "name": "bytes",
+                "type": {
+                  "type-name": "Bytes",
+                  "length": 32
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "drugName",
+          "type": {
+            "type-name": "Opaque",
+            "tsType": "string"
+          }
+        },
+        {
+          "name": "dosage",
+          "type": {
+            "type-name": "Opaque",
+            "tsType": "string"
+          }
+        },
+        {
+          "name": "quantity",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        },
+        {
+          "name": "healthInsurance",
+          "type": {
+            "type-name": "Opaque",
+            "tsType": "string"
+          }
+        },
+        {
+          "name": "issuedAt",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 18446744073709551615
+          }
+        },
+        {
+          "name": "expiresAt",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 18446744073709551615
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Uint",
+        "maxval": 340282366920938463463374607431768211455
+      }
+    },
+    {
+      "name": "verifyPrescription",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "tokenId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "payPrescription",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "tokenId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "deliverPrescription",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "tokenId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "getPrescription",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "tokenId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Struct",
+        "name": "PrescriptionData",
+        "elements": [
+          {
+            "name": "drugName",
+            "type": {
+              "type-name": "Opaque",
+              "tsType": "string"
+            }
+          },
+          {
+            "name": "dosage",
+            "type": {
+              "type-name": "Opaque",
+              "tsType": "string"
+            }
+          },
+          {
+            "name": "quantity",
+            "type": {
+              "type-name": "Uint",
+              "maxval": 340282366920938463463374607431768211455
+            }
+          },
+          {
+            "name": "healthInsurance",
+            "type": {
+              "type-name": "Opaque",
+              "tsType": "string"
+            }
+          },
+          {
+            "name": "doctorWallet",
+            "type": {
+              "type-name": "Struct",
+              "name": "ZswapCoinPublicKey",
+              "elements": [
+                {
+                  "name": "bytes",
+                  "type": {
+                    "type-name": "Bytes",
+                    "length": 32
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "patientWallet",
+            "type": {
+              "type-name": "Struct",
+              "name": "ZswapCoinPublicKey",
+              "elements": [
+                {
+                  "name": "bytes",
+                  "type": {
+                    "type-name": "Bytes",
+                    "length": 32
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "issuedAt",
+            "type": {
+              "type-name": "Uint",
+              "maxval": 18446744073709551615
+            }
+          },
+          {
+            "name": "expiresAt",
+            "type": {
+              "type-name": "Uint",
+              "maxval": 18446744073709551615
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "type-name": "Enum",
+              "name": "Status",
+              "elements": [
+                "init",
+                "verified",
+                "paid",
+                "delivered"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "getStatus",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "tokenId",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 340282366920938463463374607431768211455
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Enum",
+        "name": "Status",
+        "elements": [
+          "init",
+          "verified",
+          "paid",
+          "delivered"
+        ]
+      }
+    },
+    {
+      "name": "isDoctor",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "wallet",
+          "type": {
+            "type-name": "Struct",
+            "name": "ZswapCoinPublicKey",
+            "elements": [
+              {
+                "name": "bytes",
+                "type": {
+                  "type-name": "Bytes",
+                  "length": 32
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Boolean"
+      }
+    },
+    {
+      "name": "isPharmacy",
+      "pure": false,
+      "arguments": [
+        {
+          "name": "wallet",
+          "type": {
+            "type-name": "Struct",
+            "name": "ZswapCoinPublicKey",
+            "elements": [
+              {
+                "name": "bytes",
+                "type": {
+                  "type-name": "Bytes",
+                  "length": 32
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Boolean"
+      }
+    }
+  ],
+  "witnesses": [
+  ],
+  "contracts": [
+  ]
+}
