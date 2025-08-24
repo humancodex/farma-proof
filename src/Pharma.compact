@@ -80,7 +80,7 @@ export circuit createPrescription(
     status: Status.init
   };
 
-  _prescriptions.insert(disclose(tokenId), disclose(prescription));
+  _prescriptions.insert(disclose(tokenId), prescription);
   NFT__mint(left<ZswapCoinPublicKey, ContractAddress>(disclose(patientWallet)), disclose(tokenId));
   _nextTokenId = (_nextTokenId + 1) as Uint<128>;
 
