@@ -107,7 +107,7 @@ export circuit verifyPrescription(tokenId: Uint<128>): [] {
     status: Status.verified
   };
 
-  _prescriptions.insert(disclose(tokenId), disclose(updated));
+  _prescriptions.insert(disclose(tokenId), updated);
 }
 
 // Patient pays for prescription (verified -> paid)
@@ -130,7 +130,7 @@ export circuit payPrescription(tokenId: Uint<128>): [] {
     status: Status.paid
   };
 
-  _prescriptions.insert(disclose(tokenId), disclose(updated));
+  _prescriptions.insert(disclose(tokenId), updated);
 }
 
 // Pharmacy delivers medicine (paid -> delivered) and burns NFT
@@ -153,7 +153,7 @@ export circuit deliverPrescription(tokenId: Uint<128>): [] {
     status: Status.delivered
   };
 
-  _prescriptions.insert(disclose(tokenId), disclose(updated));
+  _prescriptions.insert(disclose(tokenId), updated);
   NFT__burn(disclose(tokenId));
 }
 
