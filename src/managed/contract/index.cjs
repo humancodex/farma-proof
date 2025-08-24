@@ -370,6 +370,51 @@ class Contract {
         partialProofData.output = { value: [], alignment: [] };
         return { result: result_0, context: context, proofData: partialProofData };
       },
+      burnExpiredPrescription: (...args_1) => {
+        if (args_1.length !== 3) {
+          throw new __compactRuntime.CompactError(`burnExpiredPrescription: expected 3 arguments (as invoked from Typescript), received ${args_1.length}`);
+        }
+        const contextOrig_0 = args_1[0];
+        const tokenId_0 = args_1[1];
+        const currentTime_0 = args_1[2];
+        if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.originalState != undefined && contextOrig_0.transactionContext != undefined)) {
+          __compactRuntime.type_error('burnExpiredPrescription',
+                                      'argument 1 (as invoked from Typescript)',
+                                      'Pharma.compact line 161 char 1',
+                                      'CircuitContext',
+                                      contextOrig_0)
+        }
+        if (!(typeof(tokenId_0) === 'bigint' && tokenId_0 >= 0n && tokenId_0 <= 340282366920938463463374607431768211455n)) {
+          __compactRuntime.type_error('burnExpiredPrescription',
+                                      'argument 1 (argument 2 as invoked from Typescript)',
+                                      'Pharma.compact line 161 char 1',
+                                      'Uint<0..340282366920938463463374607431768211455>',
+                                      tokenId_0)
+        }
+        if (!(typeof(currentTime_0) === 'bigint' && currentTime_0 >= 0n && currentTime_0 <= 18446744073709551615n)) {
+          __compactRuntime.type_error('burnExpiredPrescription',
+                                      'argument 2 (argument 3 as invoked from Typescript)',
+                                      'Pharma.compact line 161 char 1',
+                                      'Uint<0..18446744073709551615>',
+                                      currentTime_0)
+        }
+        const context = { ...contextOrig_0 };
+        const partialProofData = {
+          input: {
+            value: _descriptor_3.toValue(tokenId_0).concat(_descriptor_5.toValue(currentTime_0)),
+            alignment: _descriptor_3.alignment().concat(_descriptor_5.alignment())
+          },
+          output: undefined,
+          publicTranscript: [],
+          privateTranscriptOutputs: []
+        };
+        const result_0 = this._burnExpiredPrescription_0(context,
+                                                         partialProofData,
+                                                         tokenId_0,
+                                                         currentTime_0);
+        partialProofData.output = { value: [], alignment: [] };
+        return { result: result_0, context: context, proofData: partialProofData };
+      },
       getPrescription: (...args_1) => {
         if (args_1.length !== 2) {
           throw new __compactRuntime.CompactError(`getPrescription: expected 2 arguments (as invoked from Typescript), received ${args_1.length}`);
@@ -379,14 +424,14 @@ class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.originalState != undefined && contextOrig_0.transactionContext != undefined)) {
           __compactRuntime.type_error('getPrescription',
                                       'argument 1 (as invoked from Typescript)',
-                                      'Pharma.compact line 161 char 1',
+                                      'Pharma.compact line 172 char 1',
                                       'CircuitContext',
                                       contextOrig_0)
         }
         if (!(typeof(tokenId_0) === 'bigint' && tokenId_0 >= 0n && tokenId_0 <= 340282366920938463463374607431768211455n)) {
           __compactRuntime.type_error('getPrescription',
                                       'argument 1 (argument 2 as invoked from Typescript)',
-                                      'Pharma.compact line 161 char 1',
+                                      'Pharma.compact line 172 char 1',
                                       'Uint<0..340282366920938463463374607431768211455>',
                                       tokenId_0)
         }
@@ -415,14 +460,14 @@ class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.originalState != undefined && contextOrig_0.transactionContext != undefined)) {
           __compactRuntime.type_error('getStatus',
                                       'argument 1 (as invoked from Typescript)',
-                                      'Pharma.compact line 167 char 1',
+                                      'Pharma.compact line 178 char 1',
                                       'CircuitContext',
                                       contextOrig_0)
         }
         if (!(typeof(tokenId_0) === 'bigint' && tokenId_0 >= 0n && tokenId_0 <= 340282366920938463463374607431768211455n)) {
           __compactRuntime.type_error('getStatus',
                                       'argument 1 (argument 2 as invoked from Typescript)',
-                                      'Pharma.compact line 167 char 1',
+                                      'Pharma.compact line 178 char 1',
                                       'Uint<0..340282366920938463463374607431768211455>',
                                       tokenId_0)
         }
@@ -449,14 +494,14 @@ class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.originalState != undefined && contextOrig_0.transactionContext != undefined)) {
           __compactRuntime.type_error('isDoctor',
                                       'argument 1 (as invoked from Typescript)',
-                                      'Pharma.compact line 173 char 1',
+                                      'Pharma.compact line 184 char 1',
                                       'CircuitContext',
                                       contextOrig_0)
         }
         if (!(typeof(wallet_0) === 'object' && wallet_0.bytes.buffer instanceof ArrayBuffer && wallet_0.bytes.BYTES_PER_ELEMENT === 1 && wallet_0.bytes.length === 32)) {
           __compactRuntime.type_error('isDoctor',
                                       'argument 1 (argument 2 as invoked from Typescript)',
-                                      'Pharma.compact line 173 char 1',
+                                      'Pharma.compact line 184 char 1',
                                       'struct ZswapCoinPublicKey<bytes: Bytes<32>>',
                                       wallet_0)
         }
@@ -483,14 +528,14 @@ class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.originalState != undefined && contextOrig_0.transactionContext != undefined)) {
           __compactRuntime.type_error('isPharmacy',
                                       'argument 1 (as invoked from Typescript)',
-                                      'Pharma.compact line 177 char 1',
+                                      'Pharma.compact line 188 char 1',
                                       'CircuitContext',
                                       contextOrig_0)
         }
         if (!(typeof(wallet_0) === 'object' && wallet_0.bytes.buffer instanceof ArrayBuffer && wallet_0.bytes.BYTES_PER_ELEMENT === 1 && wallet_0.bytes.length === 32)) {
           __compactRuntime.type_error('isPharmacy',
                                       'argument 1 (argument 2 as invoked from Typescript)',
-                                      'Pharma.compact line 177 char 1',
+                                      'Pharma.compact line 188 char 1',
                                       'struct ZswapCoinPublicKey<bytes: Bytes<32>>',
                                       wallet_0)
         }
@@ -516,6 +561,7 @@ class Contract {
       verifyPrescription: this.circuits.verifyPrescription,
       payPrescription: this.circuits.payPrescription,
       deliverPrescription: this.circuits.deliverPrescription,
+      burnExpiredPrescription: this.circuits.burnExpiredPrescription,
       getPrescription: this.circuits.getPrescription,
       getStatus: this.circuits.getStatus,
       isDoctor: this.circuits.isDoctor,
@@ -567,6 +613,7 @@ class Contract {
     state_0.setOperation('verifyPrescription', new __compactRuntime.ContractOperation());
     state_0.setOperation('payPrescription', new __compactRuntime.ContractOperation());
     state_0.setOperation('deliverPrescription', new __compactRuntime.ContractOperation());
+    state_0.setOperation('burnExpiredPrescription', new __compactRuntime.ContractOperation());
     state_0.setOperation('getPrescription', new __compactRuntime.ContractOperation());
     state_0.setOperation('getStatus', new __compactRuntime.ContractOperation());
     state_0.setOperation('isDoctor', new __compactRuntime.ContractOperation());
@@ -2262,6 +2309,56 @@ class Contract {
                                                                             alignment: _descriptor_7.alignment() }).encode() } },
                      { ins: { cached: false, n: 1 } },
                      { ins: { cached: true, n: 2 } }]);
+    this.__burn_0(context, partialProofData, tokenId_0);
+    return [];
+  }
+  _burnExpiredPrescription_0(context, partialProofData, tokenId_0, currentTime_0)
+  {
+    __compactRuntime.assert(_descriptor_2.fromValue(Contract._query(context,
+                                                                    partialProofData,
+                                                                    [
+                                                                     { dup: { n: 0 } },
+                                                                     { idx: { cached: false,
+                                                                              pushPath: false,
+                                                                              path: [
+                                                                                     { tag: 'value',
+                                                                                       value: { value: _descriptor_10.toValue(1n),
+                                                                                                alignment: _descriptor_10.alignment() } },
+                                                                                     { tag: 'value',
+                                                                                       value: { value: _descriptor_10.toValue(13n),
+                                                                                                alignment: _descriptor_10.alignment() } }] } },
+                                                                     { push: { storage: false,
+                                                                               value: __compactRuntime.StateValue.newCell({ value: _descriptor_3.toValue(tokenId_0),
+                                                                                                                            alignment: _descriptor_3.alignment() }).encode() } },
+                                                                     'member',
+                                                                     { popeq: { cached: true,
+                                                                                result: undefined } }]).value),
+                            'Prescription does not exist');
+    const prescription_0 = _descriptor_7.fromValue(Contract._query(context,
+                                                                   partialProofData,
+                                                                   [
+                                                                    { dup: { n: 0 } },
+                                                                    { idx: { cached: false,
+                                                                             pushPath: false,
+                                                                             path: [
+                                                                                    { tag: 'value',
+                                                                                      value: { value: _descriptor_10.toValue(1n),
+                                                                                               alignment: _descriptor_10.alignment() } },
+                                                                                    { tag: 'value',
+                                                                                      value: { value: _descriptor_10.toValue(13n),
+                                                                                               alignment: _descriptor_10.alignment() } }] } },
+                                                                    { idx: { cached: false,
+                                                                             pushPath: false,
+                                                                             path: [
+                                                                                    { tag: 'value',
+                                                                                      value: { value: _descriptor_3.toValue(tokenId_0),
+                                                                                               alignment: _descriptor_3.alignment() } }] } },
+                                                                    { popeq: { cached: false,
+                                                                               result: undefined } }]).value);
+    __compactRuntime.assert(prescription_0.status !== 3,
+                            'Prescription already delivered');
+    __compactRuntime.assert(currentTime_0 > prescription_0.expiresAt,
+                            'Prescription not expired');
     this.__burn_0(context, partialProofData, tokenId_0);
     return [];
   }

@@ -34,6 +34,9 @@ export type ImpureCircuits<T> = {
   payPrescription(context: __compactRuntime.CircuitContext<T>, tokenId_0: bigint): __compactRuntime.CircuitResults<T, []>;
   deliverPrescription(context: __compactRuntime.CircuitContext<T>,
                       tokenId_0: bigint): __compactRuntime.CircuitResults<T, []>;
+  burnExpiredPrescription(context: __compactRuntime.CircuitContext<T>,
+                          tokenId_0: bigint,
+                          currentTime_0: bigint): __compactRuntime.CircuitResults<T, []>;
   getPrescription(context: __compactRuntime.CircuitContext<T>, tokenId_0: bigint): __compactRuntime.CircuitResults<T, PrescriptionData>;
   getStatus(context: __compactRuntime.CircuitContext<T>, tokenId_0: bigint): __compactRuntime.CircuitResults<T, Status>;
   isDoctor(context: __compactRuntime.CircuitContext<T>,
@@ -63,6 +66,9 @@ export type Circuits<T> = {
   payPrescription(context: __compactRuntime.CircuitContext<T>, tokenId_0: bigint): __compactRuntime.CircuitResults<T, []>;
   deliverPrescription(context: __compactRuntime.CircuitContext<T>,
                       tokenId_0: bigint): __compactRuntime.CircuitResults<T, []>;
+  burnExpiredPrescription(context: __compactRuntime.CircuitContext<T>,
+                          tokenId_0: bigint,
+                          currentTime_0: bigint): __compactRuntime.CircuitResults<T, []>;
   getPrescription(context: __compactRuntime.CircuitContext<T>, tokenId_0: bigint): __compactRuntime.CircuitResults<T, PrescriptionData>;
   getStatus(context: __compactRuntime.CircuitContext<T>, tokenId_0: bigint): __compactRuntime.CircuitResults<T, Status>;
   isDoctor(context: __compactRuntime.CircuitContext<T>,

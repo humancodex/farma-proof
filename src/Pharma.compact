@@ -157,6 +157,17 @@ export circuit deliverPrescription(tokenId: Uint<128>): [] {
   NFT__burn(disclose(tokenId));
 }
 
+// Burn expired prescription token
+export circuit burnExpiredPrescription(tokenId: Uint<128>, currentTime: Uint<64>): [] {
+  assert(_prescriptions.member(disclose(tokenId)), "Prescription does not exist");
+
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  assert(prescription.status != Status.delivered, "Prescription already delivered");
+  assert(currentTime > prescription.expiresAt, "Prescription not expired");
+
+  NFT__burn(disclose(tokenId));
+}
+
 // View prescription
 export circuit getPrescription(tokenId: Uint<128>): PrescriptionData {
   assert(_prescriptions.member(disclose(tokenId)), "Prescription does not exist");
