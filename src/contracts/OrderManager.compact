@@ -1,0 +1,339 @@
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version >= 0.16.0;
+
+import CompactStandardLibrary;
+import "./RoleRegistry" prefix RoleRegistry_;
+import "./MedicineRegistry" prefix MedicineRegistry_;
+import "./PrescriptionToken" prefix PrescriptionToken_;
+import "../modules/Initializable" prefix Initializable_;
+import "../modules/Utils" prefix Utils_;
+
+export { ZswapCoinPublicKey, ContractAddress, Either };
+
+// Role constants from RoleRegistry
+const ADMIN_ROLE: Bytes<32> = persistentHash<Bytes<32>>(pad(32, "ADMIN_ROLE"));
+const PHARMACY_ROLE: Bytes<32> = persistentHash<Bytes<32>>(pad(32, "PHARMACY_ROLE"));
+
+// Order state enum
+enum OrderState: Uint<8> {
+  INIT = 0,
+  PROOF_VALID = 1,
+  PAID = 2,
+  FULFILLED = 3,
+  CANCELLED = 4,
+  EXPIRED = 5
+}
+
+// Order data structure
+struct Order {
+  id: Uint<128>;
+  nonce: Uint<128>;
+  patient: Either<ZswapCoinPublicKey, ContractAddress>;
+  pharmacy: Either<ZswapCoinPublicKey, ContractAddress>;
+  medicineCodeHash: Bytes<32>;
+  quantity: Uint<128>;
+  proofRefHash: Bytes<32>;
+  state: OrderState;
+  tokenId: Uint<128>;  // Prescription token ID
+  createdAt: Uint<64>;
+  updatedAt: Uint<64>;
+  paidAmount: Uint<128>;
+  paymentAsset: Either<ZswapCoinPublicKey, ContractAddress>; // For asset payments
+}
+
+// Attestation structure
+struct Attestation {
+  payload: Bytes<1024>;        // Canonical JSON bytes (fixed size)
+  verifierKeyId: Opaque<"string">;
+  signatureAlg: Opaque<"string">; // "Ed25519"
+  signature: Bytes<64>;        // 64 bytes signature
+}
+
+// Payload data structure
+struct PayloadData {
+  domain: Opaque<"string">;
+  networkId: Opaque<"string">;
+  orderId: Uint<128>;
+  orderNonce: Uint<128>;
+  medicineCodeHash: Bytes<32>;
+  validFrom: Uint<64>;
+  validUntil: Uint<64>;
+  circuitId: Opaque<"string">;
+  publicSignalsCommitment: Bytes<32>;
+}
+
+// State
+export ledger _roleRegistry: ContractAddress;
+export ledger _medicineRegistry: ContractAddress;
+export ledger _prescriptionToken: ContractAddress;
+export ledger _orders: Map<Uint<128>, Order>;
+export ledger _patientOrders: Map<Either<ZswapCoinPublicKey, ContractAddress>, Vector<Uint<128>>>;
+export ledger _pharmacyOrders: Map<Either<ZswapCoinPublicKey, ContractAddress>, Vector<Uint<128>>>;
+export ledger _verifierKeys: Map<Opaque<"string">, Bytes<32>>;
+export ledger _nextOrderId: Uint<128>;
+export ledger _paused: Boolean;
+
+// Constants
+export sealed ledger NETWORK_ID: Opaque<"string">;
+export sealed ledger DOMAIN: Opaque<"string">;
+const ORDER_EXPIRY: Uint<64> = 86400; // 24 hours in seconds
+const PROOF_VALIDITY_WINDOW: Uint<64> = 300; // 5 minutes in seconds
+
+constructor(
+  roleRegistryAddress: ContractAddress,
+  medicineRegistryAddress: ContractAddress,
+  prescriptionTokenAddress: ContractAddress
+) {
+  Initializable_initialize();
+  
+  _roleRegistry = disclose(roleRegistryAddress);
+  _medicineRegistry = disclose(medicineRegistryAddress);
+  _prescriptionToken = disclose(prescriptionTokenAddress);
+  _nextOrderId = 1;
+  _paused = false;
+  
+  // Initialize constants
+  NETWORK_ID = opaque<"string">("midnight-testnet");
+  DOMAIN = opaque<"string">("FARMA_PROOF/ACCEPT_PROOF");
+}
+
+//
+// Patient Functions
+//
+
+export circuit createOrder(
+  pharmacy: Either<ZswapCoinPublicKey, ContractAddress>,
+  medicineCodeHash: Bytes<32>,
+  quantity: Uint<128>,
+  proofRefHash: Bytes<32>
+): Uint<128> {
+  assertNotPaused();
+  assert(pharmacy != burnAddress(), "OrderManager: invalid pharmacy");
+  assert(quantity > 0, "OrderManager: quantity must be positive");
+  assert(proofRefHash != default<Bytes<32>>, "OrderManager: invalid proof reference");
+  
+  const orderId = _nextOrderId;
+  _nextOrderId = _nextOrderId + 1;
+  
+  const patient = left<ZswapCoinPublicKey,ContractAddress>(ownPublicKey());
+  const currentTime = blockTime() as Uint<64>;
+  
+  // Generate nonce for security
+  const nonce = hash<Uint<128>>(
+    concatenate(
+      bytes(orderId),
+      concatenate(bytes(currentTime), bytes(patient))
+    )
+  );
+  
+  const order = Order {
+    id: orderId,
+    nonce: nonce,
+    patient: patient,
+    pharmacy: pharmacy,
+    medicineCodeHash: medicineCodeHash,
+    quantity: quantity,
+    proofRefHash: proofRefHash,
+    state: OrderState.INIT,
+    tokenId: 0,
+    createdAt: currentTime,
+    updatedAt: currentTime,
+    paidAmount: 0,
+    paymentAsset: burnAddress()
+  };
+  
+  _orders.insert(disclose(orderId), disclose(order));
+  
+  // Track by patient
+  if (!_patientOrders.member(disclose(patient))) {
+    _patientOrders.insert(disclose(patient), default<Vector<Uint<128>>>);
+  }
+  _patientOrders.lookup(patient).push(disclose(orderId));
+  
+  // Track by pharmacy
+  if (!_pharmacyOrders.member(disclose(pharmacy))) {
+    _pharmacyOrders.insert(disclose(pharmacy), default<Vector<Uint<128>>>);
+  }
+  _pharmacyOrders.lookup(pharmacy).push(disclose(orderId));
+  
+  return orderId;
+}
+
+export circuit pay(
+  orderId: Uint<128>,
+  asset: Either<ZswapCoinPublicKey, ContractAddress>,
+  amount: Uint<128>
+): [] {
+  assertNotPaused();
+  assertOrderExists(orderId);
+  assertInState(orderId, OrderState.PROOF_VALID);
+  
+  let order = _orders.lookup(disclose(orderId));
+  const caller = left<ZswapCoinPublicKey,ContractAddress>(ownPublicKey());
+  assert(order.patient == caller, "OrderManager: not order owner");
+  assert(amount > 0, "OrderManager: invalid payment amount");
+  
+  // Update order state
+  order.state = OrderState.PAID;
+  order.paidAmount = amount;
+  order.paymentAsset = asset;
+  order.updatedAt = blockTime() as Uint<64>;
+  
+  _orders.insert(disclose(orderId), disclose(order));
+}
+
+export circuit cancelOrder(orderId: Uint<128>, reason: Opaque<"string">): [] {
+  assertNotPaused();
+  assertOrderExists(orderId);
+  
+  let order = _orders.lookup(disclose(orderId));
+  const caller = left<ZswapCoinPublicKey,ContractAddress>(ownPublicKey());
+  
+  // Only patient or admin can cancel
+  assert(
+    order.patient == caller || RoleRegistry_hasRole(ADMIN_ROLE, caller),
+    "OrderManager: not authorized to cancel"
+  );
+  
+  // Can only cancel if not fulfilled
+  assert(order.state != OrderState.FULFILLED, "OrderManager: cannot cancel fulfilled order");
+  
+  // TODO: Handle refund if paid
+  
+  order.state = OrderState.CANCELLED;
+  order.updatedAt = blockTime() as Uint<64>;
+  
+  _orders.insert(disclose(orderId), disclose(order));
+}
+
+//
+// Verifier Functions
+//
+
+export circuit acceptProof(orderId: Uint<128>, attestation: Attestation): [] {
+  assertNotPaused();
+  assertOrderExists(orderId);
+  assertInState(orderId, OrderState.INIT);
+  
+  // Verify attestation signature
+  assert(verifyAttestation(orderId, attestation), "OrderManager: invalid attestation");
+  
+  let order = _orders.lookup(disclose(orderId));
+  order.state = OrderState.PROOF_VALID;
+  order.updatedAt = blockTime() as Uint<64>;
+  
+  _orders.insert(disclose(orderId), disclose(order));
+}
+
+//
+// Pharmacy Functions
+//
+
+export circuit fulfill(orderId: Uint<128>, tokenId: Uint<128>): [] {
+  RoleRegistry_assertOnlyRole(PHARMACY_ROLE);
+  assertNotPaused();
+  assertOrderExists(orderId);
+  assertInState(orderId, OrderState.PAID);
+  
+  let order = _orders.lookup(disclose(orderId));
+  const caller = left<ZswapCoinPublicKey,ContractAddress>(ownPublicKey());
+  assert(order.pharmacy == caller, "OrderManager: not assigned pharmacy");
+  
+  // Verify prescription token exists and is valid
+  const prescription = PrescriptionToken_getPrescription(tokenId);
+  assert(prescription.codeHash == order.medicineCodeHash, "OrderManager: medicine mismatch");
+  assert(PrescriptionToken_isValidPrescription(tokenId), "OrderManager: invalid prescription");
+  
+  // Redeem quantity from prescription
+  const redeemed = PrescriptionToken_redeemQty(tokenId, order.quantity);
+  assert(redeemed, "OrderManager: prescription redemption failed");
+  
+  order.state = OrderState.FULFILLED;
+  order.tokenId = tokenId;
+  order.updatedAt = blockTime() as Uint<64>;
+  
+  _orders.insert(disclose(orderId), disclose(order));
+}
+
+//
+// Admin Functions
+//
+
+export circuit registerVerifierKey(keyId: Opaque<"string">, publicKey: Bytes<32>): [] {
+  RoleRegistry_assertOnlyRole(ADMIN_ROLE);
+  assert(publicKey != default<Bytes<32>>, "OrderManager: invalid public key");
+  
+  _verifierKeys.insert(disclose(keyId), disclose(publicKey));
+}
+
+export circuit pause(): [] {
+  RoleRegistry_assertOnlyRole(ADMIN_ROLE);
+  assert(!_paused, "OrderManager: already paused");
+  _paused = true;
+}
+
+export circuit unpause(): [] {
+  RoleRegistry_assertOnlyRole(ADMIN_ROLE);
+  assert(_paused, "OrderManager: not paused");
+  _paused = false;
+}
+
+//
+// View Functions
+//
+
+export circuit getOrder(orderId: Uint<128>): Order {
+  assertOrderExists(orderId);
+  return _orders.lookup(disclose(orderId));
+}
+
+export circuit isPaused(): Boolean {
+  return _paused;
+}
+
+export circuit getOrderCount(): Uint<128> {
+  return _nextOrderId - 1;
+}
+
+//
+// Internal Functions
+//
+
+circuit verifyAttestation(orderId: Uint<128>, att: Attestation): Boolean {
+  const order = _orders.lookup(disclose(orderId));
+  
+  // Get verifier public key
+  if (!_verifierKeys.member(disclose(att.verifierKeyId))) {
+    return false;
+  }
+  const publicKey = _verifierKeys.lookup(disclose(att.verifierKeyId));
+  
+  // Verify signature algorithm
+  const expectedAlg = opaque<"string">("Ed25519");
+  if (att.signatureAlg != expectedAlg) {
+    return false;
+  }
+  
+  // In production, this would:
+  // 1. Parse canonical JSON payload
+  // 2. Verify domain, network ID, order ID, nonce
+  // 3. Check timestamp validity
+  // 4. Verify Ed25519 signature
+  // For now, simplified validation
+  
+  return (att.signature != default<Bytes<64>> && att.payload != default<Bytes<1024>>);
+}
+
+circuit assertNotPaused(): [] {
+  assert(!_paused, "OrderManager: paused");
+}
+
+circuit assertOrderExists(orderId: Uint<128>): [] {
+  assert(_orders.member(disclose(orderId)), "OrderManager: order does not exist");
+}
+
+circuit assertInState(orderId: Uint<128>, state: OrderState): [] {
+  const order = _orders.lookup(disclose(orderId));
+  assert(order.state == state, "OrderManager: invalid state transition");
+}

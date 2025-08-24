@@ -1,0 +1,146 @@
+// SPDX-License-Identifier: MIT
+
+pragma language_version >= 0.16.0;
+
+/**
+ * @module AccessControl
+ * @description An unshielded AccessControl library for Farma-Proof.
+ * Based on OpenZeppelin's AccessControl module pattern.
+ */
+module AccessControl {
+  import CompactStandardLibrary;
+  import "./Utils" prefix Utils_;
+
+  /**
+   * @description Mapping from a role identifier -> account -> its permissions.
+   */
+  export ledger _operatorRoles: Map<Bytes<32>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Boolean>>;
+
+  /**
+   * @description Mapping from a role identifier to an admin role identifier.
+   */
+  export ledger _adminRoles: Map<Bytes<32>, Bytes<32>>;
+
+  export ledger DEFAULT_ADMIN_ROLE: Bytes<32>;
+
+  /**
+   * @description Returns `true` if `account` has been granted `roleId`.
+   */
+  export circuit hasRole(roleId: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    if (
+      _operatorRoles.member(disclose(roleId)) &&
+      _operatorRoles
+        .lookup(roleId)
+        .member(disclose(account))
+      ) {
+      return _operatorRoles
+        .lookup(roleId)
+        .lookup(disclose(account));
+    } else {
+      return false;
+    }
+  }
+
+  /**
+   * @description Reverts if `ownPublicKey()` is missing `roleId`.
+   */
+  export circuit assertOnlyRole(roleId: Bytes<32>): [] {
+    _checkRole(roleId, left<ZswapCoinPublicKey,ContractAddress>(ownPublicKey()));
+  }
+
+  /**
+   * @description Reverts if `account` is missing `roleId`.
+   */
+  export circuit _checkRole(roleId: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+    assert(hasRole(roleId, account), "AccessControl: unauthorized account");
+  }
+
+  /**
+   * @description Returns the admin role that controls `roleId`.
+   */
+  export circuit getRoleAdmin(roleId: Bytes<32>): Bytes<32> {
+    if (_adminRoles.member(disclose(roleId))) {
+      return _adminRoles.lookup(disclose(roleId));
+    }
+    return default<Bytes<32>>;
+  }
+
+  /**
+   * @description Grants `roleId` to `account`.
+   */
+  export circuit grantRole(roleId: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+    assertOnlyRole(getRoleAdmin(roleId));
+    _grantRole(roleId, account);
+  }
+
+  /**
+   * @description Revokes `roleId` from `account`.
+   */
+  export circuit revokeRole(roleId: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+    assertOnlyRole(getRoleAdmin(roleId));
+    _revokeRole(roleId, account);
+  }
+
+  /**
+   * @description Revokes `roleId` from the calling account.
+   */
+  export circuit renounceRole(roleId: Bytes<32>, callerConfirmation: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+    assert(callerConfirmation == left<ZswapCoinPublicKey,ContractAddress>(ownPublicKey()), "AccessControl: bad confirmation");
+    _revokeRole(roleId, callerConfirmation);
+  }
+
+  /**
+   * @description Sets `adminRole` as `roleId`'s admin role.
+   */
+  export circuit _setRoleAdmin(roleId: Bytes<32>, adminRole: Bytes<32>): [] {
+    _adminRoles.insert(disclose(roleId), disclose(adminRole));
+  }
+
+  /**
+   * @description Attempts to grant `roleId` to `account`.
+   */
+  export circuit _grantRole(roleId: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    assert(!Utils_isContractAddress(account), "AccessControl: unsafe role approval");
+    return _unsafeGrantRole(roleId, account);
+  }
+
+  /**
+   * @description Unsafe grant role variant.
+   */
+  export circuit _unsafeGrantRole(roleId: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    if (hasRole(roleId, account)) {
+      return false;
+    }
+
+    if (!_operatorRoles.member(disclose(roleId))) {
+      _operatorRoles.insert(
+        disclose(roleId),
+        default<Map<
+          Either<ZswapCoinPublicKey, ContractAddress>,
+          Boolean
+        >>
+      );
+      _operatorRoles
+        .lookup(roleId)
+        .insert(disclose(account), true);
+      return true;
+    }
+
+    _operatorRoles.lookup(roleId).insert(disclose(account), true);
+    return true;
+  }
+
+  /**
+   * @description Attempts to revoke `roleId` from `account`.
+   */
+  export circuit _revokeRole(roleId: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    if (!hasRole(roleId, account)) {
+      return false;
+    }
+
+    _operatorRoles
+      .lookup(roleId)
+      .insert(disclose(account), false);
+    return true;
+  }
+}

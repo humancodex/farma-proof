@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version >= 0.16.0;
+
+import CompactStandardLibrary;
+import "../modules/AccessControl" prefix AccessControl_;
+import "../modules/Initializable" prefix Initializable_;
+import "../modules/Utils" prefix Utils_;
+
+export { ZswapCoinPublicKey, ContractAddress, Either };
+
+// Role identifiers
+export sealed ledger ADMIN_ROLE: Bytes<32>;
+export sealed ledger DOCTOR_ROLE: Bytes<32>;
+export sealed ledger PHARMACY_ROLE: Bytes<32>;
+export sealed ledger VERIFIER_ROLE: Bytes<32>;
+
+// State
+export ledger _paused: Boolean;
+
+constructor(initialAdmin: Either<ZswapCoinPublicKey, ContractAddress>) {
+  Initializable_initialize();
+  
+  // Initialize roles
+  ADMIN_ROLE = persistentHash<Bytes<32>>(pad(32, "ADMIN_ROLE"));
+  DOCTOR_ROLE = persistentHash<Bytes<32>>(pad(32, "DOCTOR_ROLE"));
+  PHARMACY_ROLE = persistentHash<Bytes<32>>(pad(32, "PHARMACY_ROLE"));
+  VERIFIER_ROLE = persistentHash<Bytes<32>>(pad(32, "VERIFIER_ROLE"));
+  
+  // Set default admin role
+  AccessControl_DEFAULT_ADMIN_ROLE = ADMIN_ROLE;
+  
+  // Set role admin relationships
+  AccessControl__setRoleAdmin(DOCTOR_ROLE, ADMIN_ROLE);
+  AccessControl__setRoleAdmin(PHARMACY_ROLE, ADMIN_ROLE);
+  AccessControl__setRoleAdmin(VERIFIER_ROLE, ADMIN_ROLE);
+  
+  // Grant admin role to initial admin
+  AccessControl_grantRole(ADMIN_ROLE, initialAdmin);
+  
+  _paused = false;
+}
+
+//
+// Role Management Circuits
+//
+
+export circuit grantRole(role: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+  assertNotPaused();
+  AccessControl_grantRole(role, account);
+}
+
+export circuit revokeRole(role: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+  assertNotPaused();
+  AccessControl_revokeRole(role, account);
+}
+
+export circuit renounceRole(role: Bytes<32>, callerConfirmation: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+  AccessControl_renounceRole(role, callerConfirmation);
+}
+
+export circuit hasRole(role: Bytes<32>, account: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+  return AccessControl_hasRole(role, account);
+}
+
+export circuit getRoleAdmin(role: Bytes<32>): Bytes<32> {
+  return AccessControl_getRoleAdmin(role);
+}
+
+//
+// Pause Functionality
+//
+
+export circuit pause(): [] {
+  AccessControl_assertOnlyRole(ADMIN_ROLE);
+  assert(!_paused, "RoleRegistry: already paused");
+  _paused = true;
+}
+
+export circuit unpause(): [] {
+  AccessControl_assertOnlyRole(ADMIN_ROLE);
+  assert(_paused, "RoleRegistry: not paused");
+  _paused = false;
+}
+
+export circuit paused(): Boolean {
+  return _paused;
+}
+
+//
+// Internal Functions
+//
+
+circuit assertNotPaused(): [] {
+  assert(!_paused, "RoleRegistry: paused");
+}
+
+circuit assertOnlyAdmin(): [] {
+  AccessControl_assertOnlyRole(ADMIN_ROLE);
+}

@@ -1,0 +1,114 @@
+library Utils {
+    // Cryptographic functions
+    function blake2b256(bytes memory data) internal pure returns (bytes32) {
+        // Blake2b-256 hash function
+        // In Compact, this would use the native blake2b implementation
+        return keccak256(data); // Placeholder
+    }
+    
+    function ed25519Verify(
+        bytes memory publicKey,
+        bytes32 messageHash,
+        bytes memory signature
+    ) internal pure returns (bool) {
+        // Ed25519 signature verification
+        // In Compact, this would use native Ed25519 verification
+        require(publicKey.length == 32, "Utils: invalid public key length");
+        require(signature.length == 64, "Utils: invalid signature length");
+        
+        // Placeholder verification logic
+        return true;
+    }
+    
+    // Encoding functions
+    function canonicalJson(bytes memory data) internal pure returns (bytes memory) {
+        // Convert to canonical JSON format
+        // This ensures consistent ordering and formatting
+        return data;
+    }
+    
+    // Time utilities
+    function isExpired(uint256 timestamp) internal view returns (bool) {
+        return timestamp <= block.timestamp;
+    }
+    
+    function addDays(uint256 timestamp, uint256 days) internal pure returns (uint256) {
+        return timestamp + (days * 1 days);
+    }
+    
+    function addHours(uint256 timestamp, uint256 hours) internal pure returns (uint256) {
+        return timestamp + (hours * 1 hours);
+    }
+    
+    // Array utilities
+    function contains(uint256[] memory array, uint256 value) internal pure returns (bool) {
+        for (uint256 i = 0; i < array.length; i++) {
+            if (array[i] == value) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    function remove(uint256[] storage array, uint256 value) internal {
+        for (uint256 i = 0; i < array.length; i++) {
+            if (array[i] == value) {
+                array[i] = array[array.length - 1];
+                array.pop();
+                break;
+            }
+        }
+    }
+    
+    // String utilities
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return keccak256(bytes(a)) == keccak256(bytes(b));
+    }
+    
+    function isEmptyString(string memory str) internal pure returns (bool) {
+        return bytes(str).length == 0;
+    }
+    
+    // Validation utilities
+    function isValidAddress(address addr) internal pure returns (bool) {
+        return addr != address(0);
+    }
+    
+    function isValidBytes32(bytes32 data) internal pure returns (bool) {
+        return data != bytes32(0);
+    }
+    
+    // Math utilities with overflow protection
+    function safeAdd(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a + b;
+        require(c >= a, "Utils: addition overflow");
+        return c;
+    }
+    
+    function safeSub(uint256 a, uint256 b) internal pure returns (uint256) {
+        require(b <= a, "Utils: subtraction overflow");
+        return a - b;
+    }
+    
+    function safeMul(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0) {
+            return 0;
+        }
+        uint256 c = a * b;
+        require(c / a == b, "Utils: multiplication overflow");
+        return c;
+    }
+    
+    function safeDiv(uint256 a, uint256 b) internal pure returns (uint256) {
+        require(b > 0, "Utils: division by zero");
+        return a / b;
+    }
+    
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+    
+    function max(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a : b;
+    }
+}

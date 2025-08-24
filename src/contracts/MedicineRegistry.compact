@@ -1,0 +1,200 @@
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version >= 0.16.0;
+
+import CompactStandardLibrary;
+import "./RoleRegistry" prefix RoleRegistry_;
+import "../modules/Initializable" prefix Initializable_;
+import "../modules/Utils" prefix Utils_;
+
+export { ZswapCoinPublicKey, ContractAddress, Either };
+
+// Medicine status enum - using Uint<8> for efficiency
+enum MedicineStatus: Uint<8> {
+  INACTIVE = 0,
+  ACTIVE = 1,
+  RESTRICTED = 2,
+  DISABLED = 3
+}
+
+// Medicine data structure
+struct Medicine {
+  codeHash: Bytes<32>;
+  name: Opaque<"string">;
+  maxQtyPerRx: Uint<128>;
+  status: MedicineStatus;
+  createdAt: Uint<64>;
+  updatedAt: Uint<64>;
+}
+
+struct Policy {
+  maxQtyPerRx: Uint<128>;
+  minDaysBetweenRefills: Uint<32>;
+  requiresSpecialAuth: Boolean;
+  status: MedicineStatus;
+}
+
+// State
+export ledger _roleRegistry: ContractAddress;
+export ledger _medicines: Map<Bytes<32>, Medicine>;
+export ledger _policies: Map<Bytes<32>, Policy>;
+export ledger _medicineList: Vector<Bytes<32>>;
+export ledger _paused: Boolean;
+
+constructor(roleRegistryAddress: ContractAddress) {
+  Initializable_initialize();
+  _roleRegistry = disclose(roleRegistryAddress);
+  _paused = false;
+}
+
+//
+// Admin Functions
+//
+
+export circuit addMedicine(
+  codeHash: Bytes<32>,
+  name: Opaque<"string">,
+  maxQtyPerRx: Uint<128>,
+  status: MedicineStatus
+): [] {
+  RoleRegistry_assertOnlyAdmin();
+  assertNotPaused();
+  assert(codeHash != default<Bytes<32>>, "MedicineRegistry: invalid code hash");
+  assert(!_medicines.member(disclose(codeHash)), "MedicineRegistry: medicine already exists");
+  assert(maxQtyPerRx > 0, "MedicineRegistry: max quantity must be positive");
+  
+  const currentTime = blockTime() as Uint<64>;
+  
+  const medicine = Medicine {
+    codeHash: codeHash,
+    name: name,
+    maxQtyPerRx: maxQtyPerRx,
+    status: status,
+    createdAt: currentTime,
+    updatedAt: currentTime
+  };
+  
+  const policy = Policy {
+    maxQtyPerRx: maxQtyPerRx,
+    minDaysBetweenRefills: 30,
+    requiresSpecialAuth: (status == MedicineStatus.RESTRICTED),
+    status: status
+  };
+  
+  _medicines.insert(disclose(codeHash), disclose(medicine));
+  _policies.insert(disclose(codeHash), disclose(policy));
+  _medicineList.push(disclose(codeHash));
+}
+
+export circuit updateMedicine(
+  codeHash: Bytes<32>,
+  maxQtyPerRx: Uint<128>,
+  status: MedicineStatus
+): [] {
+  RoleRegistry_assertOnlyAdmin();
+  assertNotPaused();
+  assertMedicineExists(codeHash);
+  assert(maxQtyPerRx > 0, "MedicineRegistry: max quantity must be positive");
+  
+  let medicine = _medicines.lookup(disclose(codeHash));
+  medicine.maxQtyPerRx = maxQtyPerRx;
+  medicine.status = status;
+  medicine.updatedAt = blockTime() as Uint<64>;
+  
+  let policy = _policies.lookup(disclose(codeHash));
+  policy.maxQtyPerRx = maxQtyPerRx;
+  policy.status = status;
+  policy.requiresSpecialAuth = (status == MedicineStatus.RESTRICTED);
+  
+  _medicines.insert(disclose(codeHash), disclose(medicine));
+  _policies.insert(disclose(codeHash), disclose(policy));
+}
+
+export circuit disableMedicine(codeHash: Bytes<32>): [] {
+  RoleRegistry_assertOnlyAdmin();
+  assertNotPaused();
+  assertMedicineExists(codeHash);
+  
+  let medicine = _medicines.lookup(disclose(codeHash));
+  medicine.status = MedicineStatus.DISABLED;
+  medicine.updatedAt = blockTime() as Uint<64>;
+  
+  let policy = _policies.lookup(disclose(codeHash));
+  policy.status = MedicineStatus.DISABLED;
+  
+  _medicines.insert(disclose(codeHash), disclose(medicine));
+  _policies.insert(disclose(codeHash), disclose(policy));
+}
+
+export circuit updatePolicy(
+  codeHash: Bytes<32>,
+  minDaysBetweenRefills: Uint<32>,
+  requiresSpecialAuth: Boolean
+): [] {
+  RoleRegistry_assertOnlyAdmin();
+  assertNotPaused();
+  assertMedicineExists(codeHash);
+  
+  let policy = _policies.lookup(disclose(codeHash));
+  policy.minDaysBetweenRefills = minDaysBetweenRefills;
+  policy.requiresSpecialAuth = requiresSpecialAuth;
+  
+  _policies.insert(disclose(codeHash), disclose(policy));
+}
+
+export circuit pause(): [] {
+  RoleRegistry_assertOnlyAdmin();
+  assert(!_paused, "MedicineRegistry: already paused");
+  _paused = true;
+}
+
+export circuit unpause(): [] {
+  RoleRegistry_assertOnlyAdmin();
+  assert(_paused, "MedicineRegistry: not paused");
+  _paused = false;
+}
+
+//
+// View Functions
+//
+
+export circuit isValid(codeHash: Bytes<32>): Boolean {
+  if (!_medicines.member(disclose(codeHash))) {
+    return false;
+  }
+  
+  const medicine = _medicines.lookup(disclose(codeHash));
+  return (medicine.status == MedicineStatus.ACTIVE || medicine.status == MedicineStatus.RESTRICTED);
+}
+
+export circuit getMedicine(codeHash: Bytes<32>): Medicine {
+  assertMedicineExists(codeHash);
+  return _medicines.lookup(disclose(codeHash));
+}
+
+export circuit getPolicy(codeHash: Bytes<32>): Policy {
+  assertMedicineExists(codeHash);
+  return _policies.lookup(disclose(codeHash));
+}
+
+export circuit getMedicineCount(): Uint<128> {
+  return _medicineList.length() as Uint<128>;
+}
+
+export circuit isPaused(): Boolean {
+  return _paused;
+}
+
+//
+// Internal Functions
+//
+
+
+
+circuit assertNotPaused(): [] {
+  assert(!_paused, "MedicineRegistry: paused");
+}
+
+circuit assertMedicineExists(codeHash: Bytes<32>): [] {
+  assert(_medicines.member(disclose(codeHash)), "MedicineRegistry: medicine does not exist");
+}

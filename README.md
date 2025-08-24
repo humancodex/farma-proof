@@ -14,7 +14,7 @@ Farma-Proof leverages Midnight Network's zero-knowledge capabilities to enable s
 - **AccessControl**: ADMIN_ROLE, DOCTOR_ROLE, PHARMACY_ROLE, VERIFIER_ROLE
 - **MedicineRegistry**: Central registry for medicine codes and policies
 - **PrescriptionToken**: NFT-like tokens representing prescriptions
-- **OrderEscrow**: Order management and fulfillment system
+- **OrderManager**: Order management and fulfillment system
 
 #### B. Privacy Features
 - **Zero-Knowledge Proofs**: Selective disclosure of prescription eligibility
@@ -44,7 +44,7 @@ patientCommitment, codeHash, expiresAt, qtyAllowed
 tokenId, events
 ```
 
-### OrderEscrow.compact
+### OrderManager.compact
 ```compact
 // Patient functions
 createOrder(pharmacy, codeHash, qty, proofRefHash)
@@ -69,7 +69,7 @@ fulfill(orderId, tokenId)
 ### Verification Flow
 1. **Off-chain Prover**: Generates ZK proof + attestation
 2. **Verifier Service**: Signs attestation (VERIFIER_ROLE)
-3. **On-chain Validation**: OrderEscrow.acceptProof verifies signature
+3. **On-chain Validation**: OrderManager.acceptProof verifies signature
 
 ## 💰 Payment System
 
@@ -86,7 +86,7 @@ sequenceDiagram
   participant P as Patient (UI)
   participant Prov as ZK Prover (off-chain)
   participant Ver as Verifier Service
-  participant Esc as OrderEscrow
+  participant Esc as OrderManager
   participant Reg as MedicineRegistry
   participant Pharm as Pharmacy (UI)
 
@@ -220,7 +220,7 @@ GET /medicines/{codeHash}
 - [ ] Proof validation
 
 ### Sprint 4: Order Management
-- [ ] OrderEscrow state machine
+- [ ] OrderManager state machine
 - [ ] Payment processing
 - [ ] Fulfillment workflow
 

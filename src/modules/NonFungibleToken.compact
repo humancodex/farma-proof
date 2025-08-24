@@ -1,0 +1,194 @@
+// SPDX-License-Identifier: MIT
+
+pragma language_version >= 0.16.0;
+
+/**
+ * @module NonFungibleToken
+ * @description An unshielded Non-Fungible Token library for Farma-Proof.
+ * Based on OpenZeppelin's NonFungibleToken module pattern.
+ */
+module NonFungibleToken {
+  import CompactStandardLibrary;
+  import "./Initializable" prefix Initializable_;
+  import "./Utils" prefix Utils_;
+
+  /// Public state
+  export sealed ledger _name: Opaque<"string">;
+  export sealed ledger _symbol: Opaque<"string">;
+
+  /**
+   * @description Mapping from token IDs to their owner addresses.
+   */
+  export ledger _owners: Map<Uint<128>, Either<ZswapCoinPublicKey, ContractAddress>>;
+
+  /**
+   * @description Mapping from account addresses to their token balances.
+   */
+  export ledger _balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+
+  /**
+   * @description Mapping from token IDs to approved addresses.
+   */
+  export ledger _tokenApprovals: Map<Uint<128>, Either<ZswapCoinPublicKey, ContractAddress>>;
+
+  /**
+   * @description Mapping from owner addresses to operator approvals.
+   */
+  export ledger _operatorApprovals: Map<Either<ZswapCoinPublicKey, ContractAddress>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Boolean>>;
+
+  /**
+   * @description Mapping from token IDs to their metadata URIs.
+   */
+  export ledger _tokenURIs: Map<Uint<128>, Opaque<"string">>;
+
+  /**
+   * @description Initializes the contract by setting the name and symbol.
+   */
+  export circuit initialize(name_: Opaque<"string">, symbol_: Opaque<"string">): [] {
+    Initializable_initialize();
+    _name = disclose(name_);
+    _symbol = disclose(symbol_);
+  }
+
+  /**
+   * @description Returns the number of tokens in `owner`'s account.
+   */
+  export circuit balanceOf(owner: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    Initializable_assertInitialized();
+    if (!_balances.member(disclose(owner))) {
+      return 0;
+    }
+    return _balances.lookup(disclose(owner));
+  }
+
+  /**
+   * @description Returns the owner of the `tokenId` token.
+   */
+  export circuit ownerOf(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    Initializable_assertInitialized();
+    return _requireOwned(tokenId);
+  }
+
+  /**
+   * @description Returns the token name.
+   */
+  export circuit name(): Opaque<"string"> {
+    Initializable_assertInitialized();
+    return _name;
+  }
+
+  /**
+   * @description Returns the symbol of the token.
+   */
+  export circuit symbol(): Opaque<"string"> {
+    Initializable_assertInitialized();
+    return _symbol;
+  }
+
+  /**
+   * @description Returns the token URI for the given `tokenId`.
+   */
+  export circuit tokenURI(tokenId: Uint<128>): Opaque<"string"> {
+    Initializable_assertInitialized();
+    _requireOwned(tokenId);
+
+    if (!_tokenURIs.member(disclose(tokenId))) {
+      return Utils_emptyString();
+    }
+    return _tokenURIs.lookup(disclose(tokenId));
+  }
+
+  /**
+   * @description Sets the URI for the given `tokenId`.
+   */
+  export circuit _setTokenURI(tokenId: Uint<128>, tokenURI: Opaque<"string">): [] {
+    Initializable_assertInitialized();
+    _requireOwned(tokenId);
+    _tokenURIs.insert(disclose(tokenId), disclose(tokenURI));
+  }
+
+  /**
+   * @description Mints `tokenId` and transfers it to `to`.
+   */
+  export circuit _mint(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+  ): [] {
+    Initializable_assertInitialized();
+    assert(!Utils_isContractAddress(to), "NonFungibleToken: Unsafe Transfer");
+    _unsafeMint(to, tokenId);
+  }
+
+  /**
+   * @description Unsafe mint variant.
+   */
+  export circuit _unsafeMint(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+  ): [] {
+    Initializable_assertInitialized();
+    assert(!Utils_isKeyOrAddressZero(to), "NonFungibleToken: Invalid Receiver");
+    
+    const previousOwner = _update(to, tokenId, burnAddress());
+    assert(Utils_isKeyOrAddressZero(previousOwner), "NonFungibleToken: Invalid Sender");
+  }
+
+  /**
+   * @description Destroys `tokenId`.
+   */
+  export circuit _burn(tokenId: Uint<128>): [] {
+    Initializable_assertInitialized();
+    const previousOwner = _update(burnAddress(), tokenId, burnAddress());
+    assert(!Utils_isKeyOrAddressZero(previousOwner), "NonFungibleToken: Invalid Sender");
+  }
+
+  /**
+   * @description Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist.
+   */
+  export circuit _ownerOf(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    Initializable_assertInitialized();
+    if (!_owners.member(disclose(tokenId))) {
+      return burnAddress();
+    }
+    return _owners.lookup(disclose(tokenId));
+  }
+
+  /**
+   * @description Updates token ownership.
+   */
+  circuit _update(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>,
+    auth: Either<ZswapCoinPublicKey, ContractAddress>
+  ): Either<ZswapCoinPublicKey, ContractAddress> {
+    Initializable_assertInitialized();
+    const from = _ownerOf(tokenId);
+
+    // Execute the update
+    if (!Utils_isKeyOrAddressZero(disclose(from))) {
+      const newBalance = _balances.lookup(disclose(from)) - 1 as Uint<128>;
+      _balances.insert(disclose(from), disclose(newBalance));
+    }
+
+    if (!Utils_isKeyOrAddressZero(disclose(to))) {
+      if (!_balances.member(disclose(to))) {
+        _balances.insert(disclose(to), 0);
+      }
+      const newBalance = _balances.lookup(disclose(to)) + 1 as Uint<128>;
+      _balances.insert(disclose(to), disclose(newBalance));
+    }
+
+    _owners.insert(disclose(tokenId), disclose(to));
+    return from;
+  }
+
+  /**
+   * @description Reverts if the `tokenId` doesn't have a current owner.
+   */
+  export circuit _requireOwned(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    Initializable_assertInitialized();
+    const owner = _ownerOf(tokenId);
+    assert(!Utils_isKeyOrAddressZero(owner), "NonFungibleToken: Nonexistent Token");
+    return owner;
+  }
+}

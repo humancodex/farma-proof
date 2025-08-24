@@ -1,0 +1,250 @@
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version >= 0.16.0;
+
+import CompactStandardLibrary;
+import "./RoleRegistry" prefix RoleRegistry_;
+import "./MedicineRegistry" prefix MedicineRegistry_;
+import "../modules/NonFungibleToken" prefix NonFungibleToken_;
+import "../modules/Utils" prefix Utils_;
+
+export { ZswapCoinPublicKey, ContractAddress, Either };
+
+// Role constants from RoleRegistry
+const ADMIN_ROLE: Bytes<32> = persistentHash<Bytes<32>>(pad(32, "ADMIN_ROLE"));
+const DOCTOR_ROLE: Bytes<32> = persistentHash<Bytes<32>>(pad(32, "DOCTOR_ROLE"));
+
+// Prescription data structure
+struct Prescription {
+  tokenId: Uint<128>;
+  doctor: Either<ZswapCoinPublicKey, ContractAddress>;
+  patientCommitment: Bytes<32>;  // Shielded patient identifier
+  codeHash: Bytes<32>;           // Medicine code hash
+  metaCommitment: Bytes<32>;     // Shielded metadata commitment
+  expiresAt: Uint<64>;
+  qtyAllowed: Uint<128>;
+  redeemedQty: Uint<128>;
+  createdAt: Uint<64>;
+  revoked: Boolean;
+}
+
+// State
+export ledger _roleRegistry: ContractAddress;
+export ledger _medicineRegistry: ContractAddress;
+export ledger _prescriptions: Map<Uint<128>, Prescription>;
+export ledger _doctorPrescriptions: Map<Either<ZswapCoinPublicKey, ContractAddress>, Vector<Uint<128>>>;
+export ledger _patientPrescriptions: Map<Bytes<32>, Vector<Uint<128>>>;
+export ledger _nextTokenId: Uint<128>;
+export ledger _paused: Boolean;
+
+constructor(
+  roleRegistryAddress: ContractAddress,
+  medicineRegistryAddress: ContractAddress
+) {
+  NonFungibleToken_initialize(
+    opaque<"string">("Farma-Proof Prescription Token"),
+    opaque<"string">("FPPT")
+  );
+  
+  _roleRegistry = disclose(roleRegistryAddress);
+  _medicineRegistry = disclose(medicineRegistryAddress);
+  _nextTokenId = 1;
+  _paused = false;
+}
+
+//
+// Doctor Functions
+//
+
+export circuit mintRx(
+  patientShieldedAddr: Either<ZswapCoinPublicKey, ContractAddress>,
+  patientCommitment: Bytes<32>,
+  codeHash: Bytes<32>,
+  metaCommitment: Bytes<32>,
+  expiresAt: Uint<64>,
+  qtyAllowed: Uint<128>
+): Uint<128> {
+  RoleRegistry_assertOnlyRole(DOCTOR_ROLE);
+  assertNotPaused();
+  assert(patientShieldedAddr != burnAddress(), "PrescriptionToken: invalid patient address");
+  assert(patientCommitment != default<Bytes<32>>, "PrescriptionToken: invalid patient commitment");
+  assert(metaCommitment != default<Bytes<32>>, "PrescriptionToken: invalid metadata commitment");
+  assert(expiresAt > blockTime(), "PrescriptionToken: expiry must be in future");
+  assert(qtyAllowed > 0, "PrescriptionToken: quantity must be positive");
+  
+  const tokenId = _nextTokenId;
+  _nextTokenId = _nextTokenId + 1;
+  
+  const currentTime = blockTime() as Uint<64>;
+  const doctor = left<ZswapCoinPublicKey,ContractAddress>(ownPublicKey());
+  
+  const prescription = Prescription {
+    tokenId: tokenId,
+    doctor: doctor,
+    patientCommitment: patientCommitment,
+    codeHash: codeHash,
+    metaCommitment: metaCommitment,
+    expiresAt: expiresAt,
+    qtyAllowed: qtyAllowed,
+    redeemedQty: 0,
+    createdAt: currentTime,
+    revoked: false
+  };
+  
+  // Mint NFT to patient using safe mint
+  NonFungibleToken__mint(patientShieldedAddr, tokenId);
+  
+  // Store prescription data
+  _prescriptions.insert(disclose(tokenId), disclose(prescription));
+  
+  // Track by doctor
+  if (!_doctorPrescriptions.member(disclose(doctor))) {
+    _doctorPrescriptions.insert(disclose(doctor), default<Vector<Uint<128>>>);
+  }
+  _doctorPrescriptions.lookup(doctor).push(disclose(tokenId));
+  
+  // Track by patient commitment
+  if (!_patientPrescriptions.member(disclose(patientCommitment))) {
+    _patientPrescriptions.insert(disclose(patientCommitment), default<Vector<Uint<128>>>);
+  }
+  _patientPrescriptions.lookup(patientCommitment).push(disclose(tokenId));
+  
+  return tokenId;
+}
+
+export circuit revokeRx(tokenId: Uint<128>): [] {
+  RoleRegistry_assertOnlyRole(DOCTOR_ROLE);
+  assertNotPaused();
+  assertTokenExists(tokenId);
+  assertNotRevoked(tokenId);
+  
+  let prescription = _prescriptions.lookup(disclose(tokenId));
+  
+  // Only the prescribing doctor or admin can revoke
+  const caller = left<ZswapCoinPublicKey,ContractAddress>(ownPublicKey());
+  if (!RoleRegistry_hasRole(ADMIN_ROLE, caller)) {
+    assert(prescription.doctor == caller, "PrescriptionToken: not prescription owner");
+  }
+  
+  prescription.revoked = true;
+  _prescriptions.insert(disclose(tokenId), disclose(prescription));
+}
+
+export circuit redeemQty(tokenId: Uint<128>, qty: Uint<128>): Boolean {
+  // This would be called by OrderManager contract
+  // For now, simplified implementation
+  assertTokenExists(tokenId);
+  assertNotRevoked(tokenId);
+  assertNotExpired(tokenId);
+  
+  let prescription = _prescriptions.lookup(disclose(tokenId));
+  assert(prescription.redeemedQty + qty <= prescription.qtyAllowed, "PrescriptionToken: insufficient quantity");
+  
+  prescription.redeemedQty = prescription.redeemedQty + qty;
+  _prescriptions.insert(disclose(tokenId), disclose(prescription));
+  
+  return true;
+}
+
+//
+// View Functions
+//
+
+export circuit getPrescription(tokenId: Uint<128>): Prescription {
+  assertTokenExists(tokenId);
+  return _prescriptions.lookup(disclose(tokenId));
+}
+
+export circuit isValidPrescription(tokenId: Uint<128>): Boolean {
+  if (!_prescriptions.member(disclose(tokenId))) {
+    return false;
+  }
+  
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  return !prescription.revoked && 
+         prescription.expiresAt > blockTime() &&
+         prescription.redeemedQty < prescription.qtyAllowed;
+}
+
+export circuit getRemainingQty(tokenId: Uint<128>): Uint<128> {
+  assertTokenExists(tokenId);
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  return prescription.qtyAllowed - prescription.redeemedQty;
+}
+
+export circuit verifyPrescriptionOwnership(
+  tokenId: Uint<128>,
+  patientCommitment: Bytes<32>
+): Boolean {
+  if (!_prescriptions.member(disclose(tokenId))) {
+    return false;
+  }
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  return prescription.patientCommitment == patientCommitment;
+}
+
+export circuit getTokenSupply(): Uint<128> {
+  return _nextTokenId - 1;
+}
+
+export circuit isPaused(): Boolean {
+  return _paused;
+}
+
+//
+// Admin Functions
+//
+
+export circuit pause(): [] {
+  RoleRegistry_assertOnlyRole(ADMIN_ROLE);
+  assert(!_paused, "PrescriptionToken: already paused");
+  _paused = true;
+}
+
+export circuit unpause(): [] {
+  RoleRegistry_assertOnlyRole(ADMIN_ROLE);
+  assert(_paused, "PrescriptionToken: not paused");
+  _paused = false;
+}
+
+//
+// NFT Functions (delegated to NonFungibleToken module)
+//
+
+export circuit name(): Opaque<"string"> {
+  return NonFungibleToken_name();
+}
+
+export circuit symbol(): Opaque<"string"> {
+  return NonFungibleToken_symbol();
+}
+
+export circuit ownerOf(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+  return NonFungibleToken_ownerOf(tokenId);
+}
+
+export circuit balanceOf(owner: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+  return NonFungibleToken_balanceOf(owner);
+}
+
+//
+// Internal Functions
+//
+
+circuit assertNotPaused(): [] {
+  assert(!_paused, "PrescriptionToken: paused");
+}
+
+circuit assertTokenExists(tokenId: Uint<128>): [] {
+  assert(_prescriptions.member(disclose(tokenId)), "PrescriptionToken: token does not exist");
+}
+
+circuit assertNotRevoked(tokenId: Uint<128>): [] {
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  assert(!prescription.revoked, "PrescriptionToken: prescription is revoked");
+}
+
+circuit assertNotExpired(tokenId: Uint<128>): [] {
+  const prescription = _prescriptions.lookup(disclose(tokenId));
+  assert(prescription.expiresAt > blockTime(), "PrescriptionToken: prescription expired");
+}
